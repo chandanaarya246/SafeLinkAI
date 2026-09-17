@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>SafeLink AI | URL Security Analyzer</title>
+
+    <style>
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: #0a0f1c;
+            color: white;
+            min-height: 100vh;
+
+            display: flex;
+            justify-content: center;
+            align-items: center;
+
+            padding: 30px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 850px;
+        }
+
+        /* HEADER */
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo {
+            font-size: 45px;
+            margin-bottom: 8px;
+        }
+
+        .header h1 {
+            font-size: 40px;
+            color: #00e5ff;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        /* MAIN CARD */
+
+        .card {
+            background: #111827;
+
+            border: 1px solid #243044;
+            border-radius: 18px;
+
+            padding: 35px;
+
+            box-shadow:
+                0 0 40px rgba(0, 229, 255, 0.08);
+        }
+
+        /* INPUT */
+
+        .input-label {
+            display: block;
+
+            margin-bottom: 10px;
+
+            color: #cbd5e1;
+
+            font-weight: bold;
+        }
+
+        .url-box {
+            display: flex;
+            gap: 12px;
+        }
+
+        .url-input {
+            flex: 1;
+
+            padding: 15px;
+
+            border-radius: 10px;
+
+            border: 1px solid #334155;
+
+            background: #0b1220;
+
+            color: white;
+
+            font-size: 16px;
+
+            outline: none;
+        }
+
+        .url-input::placeholder {
+            color: #64748b;
+        }
+
+        .url-input:focus {
+            border-color: #00e5ff;
+
+            box-shadow:
+                0 0 10px rgba(0, 229, 255, 0.15);
+        }
+
+        /* BUTTON */
+
+        .analyze-btn {
+            padding: 15px 24px;
+
+            border: none;
+
+            border-radius: 10px;
+
+            background: #00b8d4;
+
+            color: white;
+
+            font-size: 16px;
+
+            font-weight: bold;
+
+            cursor: pointer;
+
+            transition: 0.2s;
+        }
+
+        .analyze-btn:hover {
+            background: #00e5ff;
+
+            color: #061018;
+
+            transform: translateY(-1px);
+        }
+
+        /* RESULT */
+
+        .result {
+            margin-top: 30px;
+
+            padding-top: 30px;
+
+            border-top: 1px solid #263244;
+        }
+
+        .result h2 {
+            margin-bottom: 20px;
+
+            color: #e2e8f0;
+        }
+
+        /* URL DISPLAY */
+
+        .url-display {
+            background: #0b1220;
+
+            padding: 14px;
+
+            border-radius: 10px;
+
+            margin-bottom: 20px;
+
+            word-break: break-all;
+
+            color: #94a3b8;
+        }
+
+        /* SCORE SECTION */
+
+        .score-section {
+            background: #0b1220;
+
+            padding: 25px;
+
+            border-radius: 14px;
+
+            margin-bottom: 20px;
+        }
+
+        .score-top {
+            display: flex;
+
+            justify-content: space-between;
+
+            align-items: center;
+
+            margin-bottom: 15px;
+        }
+
+        .score-title {
+            color: #94a3b8;
+
+            font-size: 15px;
+        }
+
+        .score {
+            font-size: 38px;
+
+            font-weight: bold;
+
+            color: #00e5ff;
+        }
+
+        /* RISK BADGE */
+
+        .risk {
+            font-size: 16px;
+
+            font-weight: bold;
+
+            padding: 9px 15px;
+
+            border-radius: 20px;
+
+            background: #111827;
+        }
+
+        .low-risk {
+            color: #22c55e;
+
+            border: 1px solid #22c55e;
+        }
+
+        .medium-risk {
+            color: #f59e0b;
+
+            border: 1px solid #f59e0b;
+        }
+
+        .high-risk {
+            color: #ef4444;
+
+            border: 1px solid #ef4444;
+        }
+
+        .invalid-risk {
+            color: #94a3b8;
+
+            border: 1px solid #64748b;
+        }
+
+        /* RISK METER */
+
+        .meter-background {
+            width: 100%;
+
+            height: 14px;
+
+            background: #1e293b;
+
+            border-radius: 20px;
+
+            overflow: hidden;
+        }
+
+        .meter {
+            height: 100%;
+
+            border-radius: 20px;
+
+            width: {{ result.score if result else 0 }}%;
+
+            transition: width 0.8s ease;
+        }
+
+        .meter-low {
+            background: #22c55e;
+        }
+
+        .meter-medium {
+            background: #f59e0b;
+        }
+
+        .meter-high {
+            background: #ef4444;
+        }
+
+        .meter-invalid {
+            background: #64748b;
+        }
+
+        .meter-labels {
+            display: flex;
+
+            justify-content: space-between;
+
+            margin-top: 8px;
+
+            color: #64748b;
+
+            font-size: 12px;
+        }
+
+        /* REASONS */
+
+        .reasons {
+            background: #0b1220;
+
+            padding: 20px;
+
+            border-radius: 14px;
+        }
+
+        .reasons h3 {
+            margin-bottom: 15px;
+
+            color: #e2e8f0;
+        }
+
+        .reasons ul {
+            padding-left: 20px;
+        }
+
+        .reasons li {
+            margin-bottom: 10px;
+
+            color: #cbd5e1;
+        }
+
+        /* SAFE MESSAGE */
+
+        .safe-message {
+            background: #0b1220;
+
+            padding: 20px;
+
+            border-radius: 14px;
+
+            color: #22c55e;
+
+            border: 1px solid #1f5135;
+        }
+
+        /* FOOTER */
+
+        .footer {
+            text-align: center;
+
+            margin-top: 25px;
+
+            color: #64748b;
+
+            font-size: 13px;
+        }
+
+        /* MOBILE */
+
+        @media (max-width: 650px) {
+
+            body {
+                padding: 15px;
+            }
+
+            .card {
+                padding: 22px;
+            }
+
+            .header h1 {
+                font-size: 30px;
+            }
+
+            .url-box {
+                flex-direction: column;
+            }
+
+            .analyze-btn {
+                width: 100%;
+            }
+
+            .score-top {
+                flex-direction: column;
+
+                align-items: flex-start;
+
+                gap: 15px;
+            }
+
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+    <div class="container">
+
+
+        <!-- HEADER -->
+
+        <div class="header">
+
+            <div class="logo">
+                🛡️
+            </div>
+
+            <h1>
+                SafeLink AI
+            </h1>
+
+            <p>
+                Intelligent URL Security Analyzer
+            </p>
+
+        </div>
+
+
+        <!-- MAIN CARD -->
+
+        <div class="card">
+
+
+            <!-- URL FORM -->
+
+            <form method="POST">
+
+                <label class="input-label">
+                    Enter a website URL
+                </label>
+
+                <div class="url-box">
+
+                    <input
+                        class="url-input"
+                        type="text"
+                        name="url"
+                        placeholder="https://example.com"
+                        required
+                    >
+
+                    <button
+                        class="analyze-btn"
+                        type="submit"
+                    >
+                        🔍 Analyze
+                    </button>
+
+                </div>
+
+            </form>
+
+
+            <!-- ANALYSIS RESULT -->
+
+            {% if result %}
+
+            <div class="result">
+
+
+                <h2>
+                    🔎 Analysis Result
+                </h2>
+
+
+                <!-- URL -->
+
+                <div class="url-display">
+
+                    <strong>URL:</strong>
+
+                    {{ result.url }}
+
+                </div>
+
+
+                <!-- SCORE + METER -->
+
+                <div class="score-section">
+
+
+                    <div class="score-top">
+
+                        <div>
+
+                            <div class="score-title">
+                                Risk Score
+                            </div>
+
+                            <div class="score">
+                                {{ result.score }}/100
+                            </div>
+
+                        </div>
+
+
+                        <!-- RISK LEVEL -->
+
+                        <div class="risk
+                            {% if result.level == 'Low Risk' %}
+                                low-risk
+                            {% elif result.level == 'Medium Risk' %}
+                                medium-risk
+                            {% elif result.level == 'High Risk' %}
+                                high-risk
+                            {% else %}
+                                invalid-risk
+                            {% endif %}
+                        ">
+
+                            {{ result.level }}
+
+                        </div>
+
+                    </div>
+
+
+                    <!-- METER -->
+
+                    <div class="meter-background">
+
+                        <div class="meter
+                            {% if result.level == 'Low Risk' %}
+                                meter-low
+                            {% elif result.level == 'Medium Risk' %}
+                                meter-medium
+                            {% elif result.level == 'High Risk' %}
+                                meter-high
+                            {% else %}
+                                meter-invalid
+                            {% endif %}
+                        "></div>
+
+                    </div>
+
+
+                    <div class="meter-labels">
+
+                        <span>
+                            0 — Low
+                        </span>
+
+                        <span>
+                            30 — Medium
+                        </span>
+
+                        <span>
+                            60 — High
+                        </span>
+
+                        <span>
+                            100
+                        </span>
+
+                    </div>
+
+
+                </div>
+
+
+                <!-- DETECTED INDICATORS -->
+
+                {% if result.reasons %}
+
+                <div class="reasons">
+
+                    <h3>
+                        ⚠️ Detected Indicators
+                    </h3>
+
+                    <ul>
+
+                        {% for reason in result.reasons %}
+
+                        <li>
+                            {{ reason }}
+                        </li>
+
+                        {% endfor %}
+
+                    </ul>
+
+                </div>
+
+
+                {% else %}
+
+                <div class="safe-message">
+
+                    ✅ No suspicious indicators were detected
+                    by the current security checks.
+
+                </div>
+
+                {% endif %}
+
+
+            </div>
+
+            {% endif %}
+
+
+        </div>
+
+
+        <!-- FOOTER -->
+
+        <div class="footer">
+
+            SafeLink AI • Defensive Cybersecurity Project
+
+        </div>
+
+
+    </div>
+
+</body>
+
+</html>
