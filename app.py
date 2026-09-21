@@ -28,8 +28,12 @@ def analyze_url(url):
     # --------------------------------------------------
 
     if not url_lower.startswith("https://"):
+
         risk_score += 20
-        reasons.append("Website does not use HTTPS")
+
+        reasons.append(
+            "Website does not use HTTPS"
+        )
 
     # --------------------------------------------------
     # Check 2: IP address instead of domain name
@@ -38,7 +42,9 @@ def analyze_url(url):
     ip_pattern = r"^https?://(\d{1,3}\.){3}\d{1,3}"
 
     if re.search(ip_pattern, url_lower):
+
         risk_score += 25
+
         reasons.append(
             "URL uses an IP address instead of a domain name"
         )
@@ -48,22 +54,30 @@ def analyze_url(url):
     # --------------------------------------------------
 
     if len(url) > 100:
+
         risk_score += 15
-        reasons.append("URL is unusually long")
+
+        reasons.append(
+            "URL is unusually long"
+        )
 
     # --------------------------------------------------
     # Check 4: @ symbol
     # --------------------------------------------------
 
     if "@" in url:
+
         risk_score += 25
-        reasons.append("URL contains an @ symbol")
+
+        reasons.append(
+            "URL contains an @ symbol"
+        )
 
     # --------------------------------------------------
     # Check 5: Suspicious keywords
     # --------------------------------------------------
-    # These are checked in the URL path/hostname.
-    # Query parameters are checked separately below.
+    # These are checked only in the hostname and path.
+    # Query parameters are checked separately.
 
     suspicious_words = [
         "login",
@@ -85,6 +99,7 @@ def analyze_url(url):
         for word in suspicious_words:
 
             if word in hostname_and_path:
+
                 found_words.append(word)
 
     if found_words:
@@ -97,7 +112,42 @@ def analyze_url(url):
         )
 
     # --------------------------------------------------
-    # Check 6: Too many subdomains
+    # Check 6: Suspicious domain words
+    # --------------------------------------------------
+
+    if parsed_url is not None:
+
+        domain = parsed_url.hostname or ""
+
+        suspicious_domain_words = [
+            "secure",
+            "account",
+            "verify",
+            "login",
+            "update",
+            "support",
+            "confirmation"
+        ]
+
+        found_domain_words = []
+
+        for word in suspicious_domain_words:
+
+            if word in domain:
+
+                found_domain_words.append(word)
+
+        if found_domain_words:
+
+            risk_score += 10
+
+            reasons.append(
+                "Suspicious words found in domain: "
+                + ", ".join(found_domain_words)
+            )
+
+    # --------------------------------------------------
+    # Check 7: Too many subdomains
     # --------------------------------------------------
 
     try:
@@ -127,10 +177,11 @@ def analyze_url(url):
                     )
 
     except ValueError:
+
         pass
 
     # --------------------------------------------------
-    # Check 7: URL shortener
+    # Check 8: URL shortener
     # --------------------------------------------------
 
     shorteners = [
@@ -154,7 +205,7 @@ def analyze_url(url):
             break
 
     # --------------------------------------------------
-    # Check 8: Suspicious characters or patterns
+    # Check 9: Suspicious characters or patterns
     # --------------------------------------------------
 
     suspicious_characters = [
@@ -168,6 +219,7 @@ def analyze_url(url):
         if character in url:
 
             found_character = True
+
             break
 
     if found_character:
@@ -179,7 +231,7 @@ def analyze_url(url):
         )
 
     # --------------------------------------------------
-    # Check 9: Non-standard port
+    # Check 10: Non-standard port
     # --------------------------------------------------
 
     if parsed_url is not None:
@@ -205,7 +257,7 @@ def analyze_url(url):
             )
 
     # --------------------------------------------------
-    # Check 10: Suspicious query parameters
+    # Check 11: Suspicious query parameters
     # --------------------------------------------------
 
     if parsed_url is not None:
@@ -247,7 +299,7 @@ def analyze_url(url):
             )
 
     # --------------------------------------------------
-    # Check 11: Excessive query length
+    # Check 12: Excessive query length
     # --------------------------------------------------
 
     if parsed_url is not None:
