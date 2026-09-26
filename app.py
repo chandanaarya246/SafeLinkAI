@@ -76,8 +76,6 @@ def analyze_url(url):
     # --------------------------------------------------
     # Check 5: Suspicious keywords
     # --------------------------------------------------
-    # These are checked only in the hostname and path.
-    # Query parameters are checked separately.
 
     suspicious_words = [
         "login",
@@ -147,7 +145,45 @@ def analyze_url(url):
             )
 
     # --------------------------------------------------
-    # Check 7: Too many subdomains
+    # Check 7: Look-alike / typosquatting patterns
+    # --------------------------------------------------
+
+    if parsed_url is not None:
+
+        domain = parsed_url.hostname or ""
+
+        lookalike_patterns = {
+            "g00gle": "google",
+            "paypa1": "paypal",
+            "micros0ft": "microsoft",
+            "faceb00k": "facebook",
+            "amaz0n": "amazon",
+            "app1e": "apple"
+        }
+
+        found_lookalikes = []
+
+        for suspicious_pattern, original_name in lookalike_patterns.items():
+
+            if suspicious_pattern in domain:
+
+                found_lookalikes.append(
+                    suspicious_pattern + " resembles " + original_name
+                )
+
+        if found_lookalikes:
+
+            risk_score += 25
+
+            for lookalike in found_lookalikes:
+
+                reasons.append(
+                    "Possible look-alike domain detected: "
+                    + lookalike
+                )
+
+    # --------------------------------------------------
+    # Check 8: Too many subdomains
     # --------------------------------------------------
 
     try:
@@ -156,13 +192,11 @@ def analyze_url(url):
 
             domain = parsed_url.hostname or ""
 
-            # Check whether the host is an IPv4 address
             is_ip_address = re.match(
                 r"^\d{1,3}(\.\d{1,3}){3}$",
                 domain
             )
 
-            # Only check subdomains if host is NOT an IP
             if not is_ip_address:
 
                 domain_parts = domain.split(".")
@@ -181,7 +215,7 @@ def analyze_url(url):
         pass
 
     # --------------------------------------------------
-    # Check 8: URL shortener
+    # Check 9: URL shortener
     # --------------------------------------------------
 
     shorteners = [
@@ -205,7 +239,7 @@ def analyze_url(url):
             break
 
     # --------------------------------------------------
-    # Check 9: Suspicious characters or patterns
+    # Check 10: Suspicious characters
     # --------------------------------------------------
 
     suspicious_characters = [
@@ -231,7 +265,7 @@ def analyze_url(url):
         )
 
     # --------------------------------------------------
-    # Check 10: Non-standard port
+    # Check 11: Non-standard port
     # --------------------------------------------------
 
     if parsed_url is not None:
@@ -257,7 +291,7 @@ def analyze_url(url):
             )
 
     # --------------------------------------------------
-    # Check 11: Suspicious query parameters
+    # Check 12: Suspicious query parameters
     # --------------------------------------------------
 
     if parsed_url is not None:
@@ -299,7 +333,7 @@ def analyze_url(url):
             )
 
     # --------------------------------------------------
-    # Check 12: Excessive query length
+    # Check 13: Excessive query length
     # --------------------------------------------------
 
     if parsed_url is not None:
@@ -352,7 +386,6 @@ def home():
 
         url = request.form.get("url", "").strip()
 
-        # Validate URL before analyzing
         if not is_valid_url(url):
 
             result = {
