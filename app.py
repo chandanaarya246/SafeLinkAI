@@ -1,14 +1,67 @@
 from flask import Flask, render_template, request
 import re
-from urllib.parse import urlparse, parse_qs
+import ipaddress
+from urllib.parse import urlsplit, parse_qs
 
 app = Flask(__name__)
 
 
-def is_valid_url(url):
-    pattern = r"^https?://[^\s]+$"
-    return re.match(pattern, url) is not None
+# --------------------------------------------------
+# URL VALIDATION
+# --------------------------------------------------
 
+def is_valid_url(url):
+
+    if not url or len(url) > 2048:
+        return False
+
+    if any(character.isspace() for character in url):
+        return False
+
+    try:
+        parsed_url = urlsplit(url)
+
+        if parsed_url.scheme.lower() not in ["http", "https"]:
+            return False
+
+        hostname = parsed_url.hostname
+
+        if not hostname:
+            return False
+
+        # Check whether the hostname is a valid IP address.
+        try:
+            ipaddress.ip_address(hostname)
+            return True
+
+        except ValueError:
+            pass
+
+        # Validate a regular domain name.
+        hostname = hostname.rstrip(".").encode("idna").decode("ascii")
+
+        if len(hostname) > 253:
+            return False
+
+        labels = hostname.split(".")
+
+        for label in labels:
+
+            if not re.fullmatch(
+                r"[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?",
+                label
+            ):
+                return False
+
+        return True
+
+    except (ValueError, UnicodeError):
+        return False
+
+
+# --------------------------------------------------
+# URL SECURITY ANALYSIS
+# --------------------------------------------------
 
 def analyze_url(url):
 
@@ -17,17 +70,17 @@ def analyze_url(url):
 
     url_lower = url.lower()
 
-    # Parse the URL
-    try:
-        parsed_url = urlparse(url_lower)
-    except ValueError:
-        parsed_url = None
+    parsed_url = urlsplit(url_lower)
+
+    domain = parsed_url.hostname or ""
+    path = parsed_url.path
+    query = parsed_url.query
 
     # --------------------------------------------------
     # Check 1: HTTPS
     # --------------------------------------------------
 
-    if not url_lower.startswith("https://"):
+    if parsed_url.scheme != "https":
 
         risk_score += 20
 
@@ -36,12 +89,19 @@ def analyze_url(url):
         )
 
     # --------------------------------------------------
-    # Check 2: IP address instead of domain name
+    # Check 2: IP address instead of domain
     # --------------------------------------------------
 
-    ip_pattern = r"^https?://(\d{1,3}\.){3}\d{1,3}"
+    is_ip_address = False
 
-    if re.search(ip_pattern, url_lower):
+    try:
+        ipaddress.ip_address(domain)
+        is_ip_address = True
+
+    except ValueError:
+        pass
+
+    if is_ip_address:
 
         risk_score += 25
 
@@ -74,7 +134,7 @@ def analyze_url(url):
         )
 
     # --------------------------------------------------
-    # Check 5: Suspicious keywords
+    # Check 5: Suspicious keywords in URL path
     # --------------------------------------------------
 
     suspicious_words = [
@@ -87,18 +147,11 @@ def analyze_url(url):
 
     found_words = []
 
-    if parsed_url is not None:
+    for word in suspicious_words:
 
-        hostname_and_path = (
-            (parsed_url.hostname or "")
-            + parsed_url.path
-        )
+        if word in path:
 
-        for word in suspicious_words:
-
-            if word in hostname_and_path:
-
-                found_words.append(word)
+            found_words.append(word)
 
     if found_words:
 
@@ -113,106 +166,83 @@ def analyze_url(url):
     # Check 6: Suspicious domain words
     # --------------------------------------------------
 
-    if parsed_url is not None:
+    suspicious_domain_words = [
+        "secure",
+        "account",
+        "verify",
+        "login",
+        "update",
+        "support",
+        "confirmation"
+    ]
 
-        domain = parsed_url.hostname or ""
+    found_domain_words = []
 
-        suspicious_domain_words = [
-            "secure",
-            "account",
-            "verify",
-            "login",
-            "update",
-            "support",
-            "confirmation"
-        ]
+    for word in suspicious_domain_words:
 
-        found_domain_words = []
+        if word in domain:
 
-        for word in suspicious_domain_words:
+            found_domain_words.append(word)
 
-            if word in domain:
+    if found_domain_words:
 
-                found_domain_words.append(word)
+        risk_score += 10
 
-        if found_domain_words:
+        reasons.append(
+            "Suspicious words found in domain: "
+            + ", ".join(found_domain_words)
+        )
 
-            risk_score += 10
+    # --------------------------------------------------
+    # Check 7: Look-alike domain detection
+    # --------------------------------------------------
 
-            reasons.append(
-                "Suspicious words found in domain: "
-                + ", ".join(found_domain_words)
+    lookalike_patterns = {
+        "g00gle": "google",
+        "paypa1": "paypal",
+        "micros0ft": "microsoft",
+        "faceb00k": "facebook",
+        "amaz0n": "amazon",
+        "app1e": "apple"
+    }
+
+    found_lookalikes = []
+
+    for suspicious_pattern, original_name in lookalike_patterns.items():
+
+        if suspicious_pattern in domain:
+
+            found_lookalikes.append(
+                suspicious_pattern + " resembles " + original_name
             )
 
-    # --------------------------------------------------
-    # Check 7: Look-alike / typosquatting patterns
-    # --------------------------------------------------
+    if found_lookalikes:
 
-    if parsed_url is not None:
+        risk_score += 25
 
-        domain = parsed_url.hostname or ""
+        for lookalike in found_lookalikes:
 
-        lookalike_patterns = {
-            "g00gle": "google",
-            "paypa1": "paypal",
-            "micros0ft": "microsoft",
-            "faceb00k": "facebook",
-            "amaz0n": "amazon",
-            "app1e": "apple"
-        }
-
-        found_lookalikes = []
-
-        for suspicious_pattern, original_name in lookalike_patterns.items():
-
-            if suspicious_pattern in domain:
-
-                found_lookalikes.append(
-                    suspicious_pattern + " resembles " + original_name
-                )
-
-        if found_lookalikes:
-
-            risk_score += 25
-
-            for lookalike in found_lookalikes:
-
-                reasons.append(
-                    "Possible look-alike domain detected: "
-                    + lookalike
-                )
+            reasons.append(
+                "Possible look-alike domain detected: "
+                + lookalike
+            )
 
     # --------------------------------------------------
     # Check 8: Too many subdomains
     # --------------------------------------------------
 
-    try:
+    if not is_ip_address:
 
-        if parsed_url is not None:
+        domain_parts = domain.split(".")
 
-            domain = parsed_url.hostname or ""
+        if len(domain_parts) > 3:
 
-            is_ip_address = re.match(
-                r"^\d{1,3}(\.\d{1,3}){3}$",
-                domain
+            risk_score += 15
+
+            reasons.append(
+                "URL contains an unusually large number "
+                "of subdomains"
             )
-
-            if not is_ip_address:
-
-                domain_parts = domain.split(".")
-
-                if len(domain_parts) > 3:
-
-                    risk_score += 15
-
-                    reasons.append(
-                        "URL contains an unusually large number "
-                        "of subdomains"
-                    )
-
-    except ValueError:
-
-        pass
 
     # --------------------------------------------------
     # Check 9: URL shortener
@@ -226,37 +256,22 @@ def analyze_url(url):
         "cutt.ly"
     ]
 
-    for shortener in shorteners:
+    if any(
+        domain == shortener or domain.endswith("." + shortener)
+        for shortener in shorteners
+    ):
 
-        if shortener in url_lower:
+        risk_score += 15
 
-            risk_score += 15
-
-            reasons.append(
-                "URL uses a URL shortening service"
-            )
-
-            break
+        reasons.append(
+            "URL uses a URL shortening service"
+        )
 
     # --------------------------------------------------
     # Check 10: Suspicious characters
     # --------------------------------------------------
 
-    suspicious_characters = [
-        "\\"
-    ]
-
-    found_character = False
-
-    for character in suspicious_characters:
-
-        if character in url:
-
-            found_character = True
-
-            break
-
-    if found_character:
+    if "\\" in url:
 
         risk_score += 10
 
@@ -268,85 +283,72 @@ def analyze_url(url):
     # Check 11: Non-standard port
     # --------------------------------------------------
 
-    if parsed_url is not None:
+    try:
 
-        try:
+        port = parsed_url.port
 
-            port = parsed_url.port
-
-            if port is not None and port not in [80, 443]:
-
-                risk_score += 10
-
-                reasons.append(
-                    f"URL uses a non-standard port: {port}"
-                )
-
-        except ValueError:
+        if port is not None and port not in [80, 443]:
 
             risk_score += 10
 
             reasons.append(
-                "URL contains an invalid port number"
+                f"URL uses a non-standard port: {port}"
             )
+
+    except ValueError:
+
+        risk_score += 10
+
+        reasons.append(
+            "URL contains an invalid port number"
+        )
 
     # --------------------------------------------------
     # Check 12: Suspicious query parameters
     # --------------------------------------------------
 
-    if parsed_url is not None:
+    suspicious_parameters = [
+        "password",
+        "passwd",
+        "token",
+        "auth",
+        "verify",
+        "redirect"
+    ]
 
-        query = parsed_url.query.lower()
+    found_parameters = []
 
-        suspicious_parameters = [
-            "password",
-            "passwd",
-            "token",
-            "auth",
-            "verify",
-            "redirect"
-        ]
+    query_parameters = parse_qs(
+        query,
+        keep_blank_values=True
+    )
 
-        found_parameters = []
+    for parameter in suspicious_parameters:
 
-        try:
+        if parameter in query_parameters:
 
-            query_parameters = parse_qs(query).keys()
+            found_parameters.append(parameter)
 
-            for parameter in suspicious_parameters:
+    if found_parameters:
 
-                if parameter in query_parameters:
+        risk_score += 15
 
-                    found_parameters.append(parameter)
-
-        except ValueError:
-
-            pass
-
-        if found_parameters:
-
-            risk_score += 15
-
-            reasons.append(
-                "Suspicious query parameters found: "
-                + ", ".join(found_parameters)
-            )
+        reasons.append(
+            "Suspicious query parameters found: "
+            + ", ".join(found_parameters)
+        )
 
     # --------------------------------------------------
     # Check 13: Excessive query length
     # --------------------------------------------------
 
-    if parsed_url is not None:
+    if len(query) > 80:
 
-        query = parsed_url.query
+        risk_score += 10
 
-        if len(query) > 80:
-
-            risk_score += 10
-
-            reasons.append(
-                "URL contains an unusually long query string"
-            )
+        reasons.append(
+            "URL contains an unusually long query string"
+        )
 
     # --------------------------------------------------
     # Keep score between 0 and 100
@@ -374,7 +376,7 @@ def analyze_url(url):
 
 
 # --------------------------------------------------
-# Home page
+# HOME PAGE
 # --------------------------------------------------
 
 @app.route("/", methods=["GET", "POST"])
@@ -400,14 +402,27 @@ def home():
 
         else:
 
-            risk_score, risk_level, reasons = analyze_url(url)
+            try:
 
-            result = {
-                "url": url,
-                "score": risk_score,
-                "level": risk_level,
-                "reasons": reasons
-            }
+                risk_score, risk_level, reasons = analyze_url(url)
+
+                result = {
+                    "url": url,
+                    "score": risk_score,
+                    "level": risk_level,
+                    "reasons": reasons
+                }
+
+            except ValueError:
+
+                result = {
+                    "url": url,
+                    "score": 0,
+                    "level": "Invalid URL",
+                    "reasons": [
+                        "The URL contains an invalid format or port."
+                    ]
+                }
 
     return render_template(
         "index.html",
@@ -416,7 +431,7 @@ def home():
 
 
 # --------------------------------------------------
-# Run Flask application
+# RUN FLASK APPLICATION
 # --------------------------------------------------
 
 if __name__ == "__main__":
